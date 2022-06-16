@@ -1,0 +1,51 @@
+{
+    "name": "frontend",
+    "version": "0.1.0",
+    "private": true,
+    "proxy": "http://127.0.0.1:5000",
+    "engines": {
+        "node": "14.17.0"
+    },
+    "dependencies": {
+        "@chakra-ui/icons": "^2.0.1",
+        "@chakra-ui/react": "^2.0.2",
+        "@emotion/react": "^11.9.0",
+        "@emotion/styled": "^11.8.1",
+        "axios": "^0.27.2",
+        "babel-preset-env": "^1.7.0",
+        "framer-motion": "^4.1.17",
+        "mongoose": "^6.3.3",
+        "react": "^18.1.0",
+        "react-dom": "^18.1.0",
+        "react-lottie": "^1.2.3",
+        "react-router-dom": "^6.3.0",
+        "react-scripts": "^2.1.3",
+        "react-scrollable-feed": "^1.3.1",
+        "socket.io-client": "^4.5.1",
+        "web-vitals": "^2.1.4"
+    },
+    "scripts": {
+        "start": "react-scripts start",
+        "build": "react-scripts build",
+        "test": "react-scripts test",
+        "eject": "react-scripts eject"
+    },
+    "eslintConfig": {
+        "extends": [
+            "react-app",
+            "react-app/jest"
+        ]
+    },
+    "browserslist": {
+        "production": [
+            ">0.2%",
+            "not dead",
+            "not op_mini all"
+        ],
+        "development": [
+            "last 1 chrome version",
+            "last 1 firefox version",
+            "last 1 safari version"
+        ]
+    }
+}
