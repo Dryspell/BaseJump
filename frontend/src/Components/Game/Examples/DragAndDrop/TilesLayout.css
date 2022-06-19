@@ -1,0 +1,35 @@
+svg .tiles {
+
+}
+
+svg .tiles g {
+  fill: yellow;
+  fill-opacity: 0.6;
+}
+svg .tiles g:hover {
+  fill: orangered;
+  fill-opacity: 0.7;
+}
+svg .tiles g:hover text {
+  fill-opacity: 1;
+}
+
+svg .tiles g polygon {
+  stroke: yellow;
+  stroke-width: 0.2;
+  transition: fill-opacity .5s;
+}
+svg .tiles g text {
+  font-size: 0.22em;
+  fill: white;
+  fill-opacity: 0.7;
+  transition: fill-opacity .5s;
+}
+svg .tiles path {
+  fill: none;
+  stroke: #19aac4;
+  stroke-width: 0.2em;
+  stroke-opacity: 0.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

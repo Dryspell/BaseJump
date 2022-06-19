@@ -1,0 +1,35 @@
+svg .teacherTiles {
+
+}
+
+svg .teacherTiles g {
+  fill: red;
+  fill-opacity: 0.6;
+}
+svg .teacherTiles g:hover {
+  fill: red;
+  fill-opacity: 0.7;
+}
+svg .teacherTiles g:hover text {
+  fill-opacity: 1;
+}
+
+svg .teacherTiles g polygon {
+  stroke: red;
+  stroke-width: 0.2;
+  transition: fill-opacity .5s;
+}
+svg .teacherTiles g text {
+  font-size: 0.22em;
+  fill: white;
+  fill-opacity: 0.7;
+  transition: fill-opacity .5s;
+}
+svg .teacherTiles path {
+  fill: none;
+  stroke: #19aac4;
+  stroke-width: 0.2em;
+  stroke-opacity: 0.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
