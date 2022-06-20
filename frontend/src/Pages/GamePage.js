@@ -1,6 +1,6 @@
 import { Box } from "@chakra-ui/react";
 import React from "react";
-import Pathfinding from "../Components/Game/Examples/Pathfinding/Pathfinding";
+import Game from "../Components/Game/Game";
 import GameBox from "../Components/GameBox";
 import SideDrawer from "../Components/Miscellaneous/SideDrawer";
 import { ChatState } from "../Context/ChatProvider";
@@ -19,7 +19,7 @@ const GamePage = () => {
                 h="91.5vh"
                 p="10px"
             >
-                {user && <GameBox component={<Pathfinding />} />}
+                {user && <GameBox component={<Game />} />}
             </Box>
         </div>
     );

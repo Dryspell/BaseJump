@@ -87,4 +87,4 @@ class PatternSwap extends Component {
     }
 }
 
-export default App;
+export default PatternSwap;

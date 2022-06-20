@@ -7,13 +7,19 @@ import {
     Text,
     Hexagon,
     HexUtils,
+    Hex,
 } from "react-hexgrid";
 import "./Game.css";
 
-class Pathfinding extends Component {
+class Game extends Component {
     constructor(props) {
         super(props);
         const hexagons = GridGenerator.hexagon(4);
+        // const center = new Hex(0, 0, 0);
+        // const hexagons = GridGenerator.ring(center, 4);
+        // const hexagons = GridGenerator.orientedRectangle(10, 8);
+        // const hexagons = GridGenerator.parallelogram(-5, 5, -4, 4);
+        // const hexagons = GridGenerator.rectangle(10, 8);
         this.state = {
             hexagons,
             path: { start: null, end: null },
@@ -58,7 +64,7 @@ class Pathfinding extends Component {
     render() {
         let { hexagons, path } = this.state;
         return (
-            <div className="App">
+            <div className="Game">
                 <h2>Pathfinding & active highlight</h2>
                 <p>
                     Click a tile to start drawing a path to your cursor. Click
