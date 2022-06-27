@@ -24,6 +24,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/minions", minionRoutes);
+// app.use("/api/world", worldRoutes);
 
 // --------------------------------------------------
 // ---------------  Deployment  ---------------

@@ -25,10 +25,15 @@ const registerUser = expressAsyncHandler(async (req, res) => {
     let user = await User.create({ name, email, password, pic });
 
     if (user) {
-        delete user.password;
         res.status(201).json({
             data: {
-                user,
+                user: {
+                    _id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    isAdmin: user.isAdmin,
+                    pic: user.pic,
+                },
             },
             token: generateToken(user._id),
         });
@@ -48,10 +53,15 @@ const authUser = expressAsyncHandler(async (req, res) => {
     const user = await User.findOne({ email });
     if (user && (await user.matchPassword(password))) {
         // console.log(`User ${user.email} authenticated`);
-        const { password, ...rest } = user;
         res.status(200).json({
             data: {
-                user: rest,
+                user: {
+                    _id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    isAdmin: user.isAdmin,
+                    pic: user.pic,
+                },
             },
             token: generateToken(user._id),
         });

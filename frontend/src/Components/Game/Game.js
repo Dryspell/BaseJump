@@ -14,7 +14,7 @@ import "./Game.css";
 class Game extends Component {
     constructor(props) {
         super(props);
-        const hexagons = GridGenerator.hexagon(4);
+        const hexagons = GridGenerator.hexagon(15);
         // const center = new Hex(0, 0, 0);
         // const hexagons = GridGenerator.ring(center, 4);
         // const hexagons = GridGenerator.orientedRectangle(10, 8);
@@ -73,7 +73,7 @@ class Game extends Component {
                 <p>Hover around the board to see helper lines drawn.</p>
                 <HexGrid width={1200} height={800}>
                     <Layout
-                        size={{ x: 6, y: 6 }}
+                        size={{ x: 3, y: 3 }}
                         flat={false}
                         spacing={1.1}
                         origin={{ x: 0, y: 0 }}

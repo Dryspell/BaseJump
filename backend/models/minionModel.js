@@ -9,29 +9,29 @@ const Coordinates = mongoose.model("Coordinates", coordinatesSchema);
 
 const minionSchema = mongoose.Schema(
     {
-        minionName: { type: String, default: `Minion_${Date.now()}` },
+        name: { type: String, default: `Minion_${Date.now()}` },
         owner: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true,
         },
         isAlive: { type: Boolean, default: true },
-        minionType: { type: String, default: "Minion" },
-        minionStats: {
-            minionLevel: { type: Number, default: 1 },
-            minionHealth: { type: Number, default: 100 },
-            minionAttack: { type: Number, default: 10 },
-            minionDefense: { type: Number, default: 10 },
-            minionSpeed: { type: Number, default: 10 },
+        type: { type: String, default: "Minion" },
+        stats: {
+            level: { type: Number, default: 1 },
+            health: { type: Number, default: 100 },
+            attack: { type: Number, default: 10 },
+            defense: { type: Number, default: 10 },
+            speed: { type: Number, default: 10 },
         },
-        minionLocationData: {
-            minionFacingDirection: { type: Number, default: 0 },
-            minionMovementPath: { type: Array, default: [] },
-            minionTarget: {
+        locationData: {
+            facingDirection: { type: Number, default: 0 },
+            movementPath: { type: Array, default: [] },
+            target: {
                 type: mongoose.Schema.Types.ObjectId,
                 default: null,
             },
-            minionPosition: {
+            position: {
                 type: { type: String, default: "Point" },
                 coordinates: {
                     type: Object,
@@ -40,9 +40,11 @@ const minionSchema = mongoose.Schema(
                 },
             },
         },
-        minionExperience: { type: Number, default: 0 },
-        minionInventory: { type: Array, default: [] },
-        minionEquipment: { type: Object, default: {} },
+        experience: { type: Number, default: 0 },
+        inventory: { type: Array, default: [] },
+        equipment: { type: Object, default: {} },
+        taskQueue: { type: Array, default: [] },
+        taskHistory: { type: Array, default: [] },
     },
     {
         timestamps: true,
