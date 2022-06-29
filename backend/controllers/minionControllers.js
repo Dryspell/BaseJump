@@ -5,30 +5,73 @@ const { notFound } = require("../middleware/errorMiddleware");
 const colors = require("colors");
 
 const fetchMinions = expressAsyncHandler(async (req, res) => {
-    let minions;
-    if (req.params.minionId) {
-        minions = await Minion.findById(req.params.minionId);
-    } else {
-        minions = await Minion.find();
-    }
-    if (minions) {
-        res.status(200).json({
-            status: "success",
-            data: {
-                minions,
-            },
-        });
-    } else {
+    if (!req.params.minionId) {
+        console.log(req.params);
         res.status(404).json({
             status: "fail",
             message: "No minions found",
         });
     }
+    console.log(`Fetching minion ${req.params.minionId}`);
+
+    let minion = await fetchMinion(req.params.minionId);
+
+    if (minion) {
+        await minion.save();
+        res.status(200).json({
+            status: "success",
+            data: minion,
+        });
+    }
 });
 
+const fetchMinion = async (minionId) => {
+    const minion = await Minion.findById(minionId);
+    console.log(`Fetched minion ${minionId}`);
+    if (minion) {
+        return updateTaskQueue(minion);
+    }
+    return null;
+};
+
 const spawnMinion = expressAsyncHandler(async (req, res) => {
-    const { userId } = req.body;
-    const minion = await Minion.create({ owner: userId });
+    const { userId, allies, enemies, position, random_pos } = req.body;
+    // TODO: validate userId, allies, enemies, position, random_pos
+    const IS_ADMIN = req.user.isAdmin || true;
+    const radius = 10;
+
+    const getRandomArbitrary = (min, max) => {
+        return Math.random() * (max - min) + min;
+    };
+
+    const minion = IS_ADMIN
+        ? await Minion.create({
+              owner: userId,
+              allies: allies || ["ally"],
+              enemies: enemies || ["enemy"],
+              locationData: {
+                  position: {
+                      coordinates:
+                          position || random_pos
+                              ? {
+                                    x: Math.floor(
+                                        getRandomArbitrary(-radius, radius)
+                                    ),
+                                    y: Math.floor(
+                                        getRandomArbitrary(-radius, radius)
+                                    ),
+                                }
+                              : {
+                                    x: 0,
+                                    y: 0,
+                                },
+                      movementPath: [],
+                  },
+              },
+          })
+        : await Minion.create({
+              owner: userId,
+          });
     if (minion) {
         res.status(201).json({
             status: "success",
@@ -47,39 +90,59 @@ const spawnMinion = expressAsyncHandler(async (req, res) => {
 
 function updateTaskQueue(minion) {
     const minionId = minion._id;
-    // console.log(
-    //     `Updating minion ${minionId} task queue, ${minion.taskQueue.length} tasks in queue`
-    // );
-    minion.taskQueue.sort((a, b) => a.eta - b.eta);
-    for (i in minion.taskQueue) {
-        if (minion.taskQueue[0].eta < Date.now()) {
-            // console.log(`Task ${i} in progress: ${minion.taskQueue[i].eta}`);
-            let task = minion.taskQueue.shift();
+    const taskCount = minion.taskQueue.length;
+    console.log(
+        `Updating minion ${minionId} task queue, ${minion.taskQueue.length} tasks in queue`
+    );
 
-            switch (task.task) {
-                case "move":
-                    minion.locationData.position.coordinates = task.taskData.to;
-                    minion.taskHistory.push(task);
-                    // console.log(minion.taskQueue);
-                    // console.log(
-                    //     `Minion ${minionId} moved to`,
-                    //     task.taskData.to
-                    // );
-                    break;
-                default:
-                    console.log("Unknown task".red);
-            }
+    minion.taskQueue = minion.taskQueue.sort((a, b) => a.eta - b.eta);
+    if (taskCount === 0) return minion;
+
+    for (let i = 0; i < taskCount; i++) {
+        if (minion.taskQueue[0].eta > Date.now()) return minion;
+        // let task = minion.taskQueue[0];
+        // minion.taskQueue = minion.taskQueue.slice(1);
+        let task = minion.taskQueue.shift();
+
+        if (task.taskData.to == minion.locationData.position.coordinates) {
+            continue;
+        }
+
+        console.log(
+            `Minion ${minionId} is executing task`,
+            task,
+            `that happened at ${(Date.now() - task.eta) / 1000} seconds ago`
+        );
+
+        if (task.task == "move") {
+            minion.locationData.position.coordinates = task.taskData.to;
+            minion.locationData.movementPath = minion.taskQueue
+                .filter((t) => t.task == "move")
+                .map((t) => t.taskData.to);
+            minion.taskHistory.push(task);
+            console.log(`Minion ${minionId} moved to`, task.taskData.to);
+        } else {
+            minion.taskQueue = minion.taskQueue.filter(
+                (t) => t.task !== "move"
+            );
+            minion.locationData.movementPath = [];
+            console.log("Unknown task");
         }
     }
+
     return minion;
 }
 
 const clearTaskQueue = expressAsyncHandler(async (req, res) => {
     const { minionId } = req.body;
-    // console.log(`Clearing task queue for minion ${minionId}`);
-    const minion = await Minion.findById(minionId);
+    const minion = await fetchMinion(minionId);
+
     if (!minion) {
-        return;
+        res.status(404).json({
+            status: "fail",
+            message: "Minion not found",
+        });
+        throw new Error("Minion not found");
     }
     minion.taskQueue = [];
     minion.locationData.movementPath = [];
@@ -104,18 +167,21 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
         throw new Error("Please provide all required fields");
     }
 
-    let minion = await Minion.findById(minionId);
+    let minion = await fetchMinion(minionId);
     if (!minion) {
-        return;
+        res.status(404).json({
+            status: "fail",
+            message: "Minion not found",
+        });
+        throw new Error("Minion not found");
     } else {
-        // console.log(
-        //     `Received request to move minion ${minionId} from `,
-        //     minion.locationData.position.coordinates,
-        //     ` to `,
-        //     coords
-        // );
+        console.log(
+            `Received request to move minion ${minionId} from `,
+            minion.locationData.position.coordinates,
+            ` to `,
+            coords
+        );
     }
-    minion = updateTaskQueue(minion);
 
     const currentCoords = minion.locationData.position.coordinates;
 
@@ -184,15 +250,15 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
                             y: node.y + y1,
                         };
                     });
-                    // console.log(
-                    //     `Path found between`,
-                    //     currentCoords,
-                    //     ` and `,
-                    //     coords
-                    // );
+                    console.log(
+                        `Path found between`,
+                        currentCoords,
+                        ` and `,
+                        coords
+                    );
                     let eta = Date.now();
-                    let from = currentCoords;
-                    let to = truePath[0];
+                    let from = truePath[0];
+                    let to = truePath[1];
                     if (!appendQueue) {
                         minion.taskQueue = minion.taskQueue.filter((task) => {
                             return task.task !== "move";

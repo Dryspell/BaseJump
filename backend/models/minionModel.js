@@ -40,11 +40,32 @@ const minionSchema = mongoose.Schema(
                 },
             },
         },
+
         experience: { type: Number, default: 0 },
         inventory: { type: Array, default: [] },
         equipment: { type: Object, default: {} },
+
+        currentAction: { type: Object, default: { action: "idle" } },
+        atRestAction: { type: Object, default: { action: "idle" } },
+
         taskQueue: { type: Array, default: [] },
         taskHistory: { type: Array, default: [] },
+        enemies: { type: Array, default: ["enemy"] },
+        allies: { type: Array, default: ["ally"] },
+        logs: { type: Array, default: [] },
+        statistics: {
+            type: Object,
+            default: {
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+                damageDealt: 0,
+                damageTaken: 0,
+                healing: 0,
+                damageDealtToEnemies: 0,
+                damageTakenFromEnemies: 0,
+            },
+        },
     },
     {
         timestamps: true,
