@@ -11,7 +11,7 @@ const router = express.Router();
 router.route("/spawn").post(protect, spawnMinion);
 // router.route("/testspawn").post(spawnMinion);
 
-router.route("/move/").patch(protect, moveMinion);
+router.route("/move").patch(protect, moveMinion);
 router.route("/cleartasks").delete(protect, clearTaskQueue);
 router.route("/:minionId?").get(protect, fetchMinions);
 
