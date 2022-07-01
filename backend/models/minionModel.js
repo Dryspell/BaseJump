@@ -21,14 +21,23 @@ const minionSchema = mongoose.Schema(
             level: { type: Number, default: 1 },
             health: { type: Number, default: 100 },
             attack: { type: Number, default: 10 },
+            meleeAttackSpeed: { type: Number, default: 10 },
+            meleeAttackCooldown: { type: Number, default: 1000 },
             defense: { type: Number, default: 10 },
             speed: { type: Number, default: 10 },
+            meleeRange: { type: Number, default: 1 },
+            rangedRange: { type: Number, default: 1 },
+            vision: { type: Number, default: 10 },
         },
         locationData: {
             facingDirection: { type: Number, default: 0 },
-            movementPath: { type: Array, default: [] },
+            // movementPath: { type: Array, default: [] },
             target: {
-                type: mongoose.Schema.Types.ObjectId,
+                type: Object,
+                default: null,
+            },
+            movementTarget: {
+                type: Object,
                 default: null,
             },
             position: {
@@ -45,12 +54,16 @@ const minionSchema = mongoose.Schema(
         inventory: { type: Array, default: [] },
         equipment: { type: Object, default: {} },
 
-        currentAction: { type: Object, default: { action: "idle" } },
-        atRestAction: { type: Object, default: { action: "idle" } },
+        currentAction: { type: String, default: "idle" },
+        atRestAction: { type: String, default: "idle" },
 
         taskQueue: { type: Array, default: [] },
         taskHistory: { type: Array, default: [] },
         enemies: { type: Array, default: ["enemy"] },
+        enemiesInVision: { type: Array, default: [] },
+        enemiesInMeleeRange: { type: Array, default: [] },
+        enemiesInRangedRange: { type: Array, default: [] },
+        team: { type: Array, default: ["ally"] },
         allies: { type: Array, default: ["ally"] },
         logs: { type: Array, default: [] },
         statistics: {

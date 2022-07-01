@@ -33,22 +33,44 @@ const fetchMinion = async (minionId) => {
     }
     return null;
 };
+const getRandomArbitrary = (min, max) => {
+    return Math.random() * (max - min) + min;
+};
+
+const getRandomGridPoint = (coordinates, radius) => {
+    // get random point within circle of radius
+    const randomAngle = getRandomArbitrary(0, 2 * Math.PI);
+    const randomIntDistance = Math.floor(getRandomArbitrary(0, radius + 1));
+    const randomPoint = {
+        x: coordinates.x + randomIntDistance * Math.cos(randomAngle),
+        y: coordinates.y + randomIntDistance * Math.sin(randomAngle),
+    };
+    return randomPoint;
+};
 
 const spawnMinion = expressAsyncHandler(async (req, res) => {
-    const { userId, allies, enemies, position, random_pos } = req.body;
+    const {
+        userId,
+        allies,
+        enemies,
+        position,
+        random_pos,
+        currentAction,
+        atRestAction,
+        team,
+    } = req.body;
     // TODO: validate userId, allies, enemies, position, random_pos
     const IS_ADMIN = req.user.isAdmin || true;
     const radius = 10;
-
-    const getRandomArbitrary = (min, max) => {
-        return Math.random() * (max - min) + min;
-    };
 
     const minion = IS_ADMIN
         ? await Minion.create({
               owner: userId,
               allies: allies || ["ally"],
               enemies: enemies || ["enemy"],
+              currentAction: currentAction || "idle",
+              atRestAction: atRestAction || "idle",
+              team: team || [],
               locationData: {
                   position: {
                       coordinates:
@@ -88,7 +110,7 @@ const spawnMinion = expressAsyncHandler(async (req, res) => {
     }
 });
 
-function updateTaskQueue(minion) {
+const updateTaskQueue = async (minion) => {
     const minionId = minion._id;
     const taskCount = minion.taskQueue.length;
     console.log(
@@ -114,13 +136,151 @@ function updateTaskQueue(minion) {
             `that happened at ${(Date.now() - task.eta) / 1000} seconds ago`
         );
 
-        if (task.task == "move") {
+        if (
+            task.task == "move" &&
+            ["idle", "wander"].includes(minion.currentAction)
+        ) {
             minion.locationData.position.coordinates = task.taskData.to;
             minion.locationData.movementPath = minion.taskQueue
                 .filter((t) => t.task == "move")
                 .map((t) => t.taskData.to);
             minion.taskHistory.push(task);
             console.log(`Minion ${minionId} moved to`, task.taskData.to);
+        } else if (
+            task.task == "patrol" ||
+            (task.task == "move " && ["patrol"].includes(minion.currentAction))
+        ) {
+            // check if any enemies are in range
+            minion.enemiesInVision = await Minion.find({
+                locationData: {
+                    position: {
+                        coordinates: {
+                            $near: {
+                                $geometry: {
+                                    type: "Point",
+                                    coordinates: task.taskData.to,
+                                },
+                                $maxDistance: minion.stats.vision,
+                            },
+                        },
+                    },
+                },
+                $or: [
+                    { team: { $in: minion.enemies } },
+                    { enemies: { $in: minion.team } },
+                ],
+            });
+            if (minion.enemiesInVision.length > 0) {
+                // check if any enemies are in range
+                minion.enemiesInRangedRange = minion.enemiesInVision.filter(
+                    (enemy) => {
+                        return (
+                            distance(
+                                minion.locationData.position.coordinates,
+                                enemy.locationData.position.coordinates
+                            ) < minion.stats.rangedAttackRange
+                        );
+                    }
+                );
+                minion.enemiesInMeleeRange = minion.enemiesInVision.filter(
+                    (enemy) => {
+                        return (
+                            distance(
+                                minion.locationData.position.coordinates,
+                                enemy.locationData.position.coordinates
+                            ) < minion.stats.meleeAttackRange
+                        );
+                    }
+                );
+
+                console.log(
+                    `Minion ${minionId} found (${minion.enemiesInVision.length}) enemies in vision: `,
+                    minion.enemiesInVision,
+                    `(${minion.enemiesInMeleeRange.length}) enemies in melee range: `,
+                    minion.enemiesInMeleeRange,
+                    `(${minion.enemiesInRangedRange.length}) enemies in ranged range: `,
+                    minion.enemiesInRangedRange
+                );
+
+                if (minion.enemiesInMeleeRange.length > 0) {
+                    // attack
+                    minion.taskHistory.push(task);
+                    minion.currentAction = "meleeAttack";
+                    minion.locationData.target = minion.enemiesInMeleeRange[0];
+                    // generate damage
+                    minion.locationData.target.stats.health -=
+                        Math.floor((Math.random() * minion.stats.attack) / 2) **
+                        2;
+                    await minion.target.save();
+                    console.log(
+                        `Minion ${minionId} attacked ${minion.enemiesInMeleeRange[0]._id}`
+                    );
+                    minion.taskQueue.push({
+                        task: "attack",
+                        taskData: {
+                            target: minion.enemiesInMeleeRange[0]._id,
+                        },
+                        eta:
+                            Date.now() +
+                            Math.min(
+                                50000 / minion.stats.meleeAttackSpeed,
+                                minion.stats.meleeAttackCooldown
+                            ),
+                    });
+                } else if (minion.enemiesInRangedRange.length > 0) {
+                    // attack
+                    minion.taskHistory.push(task);
+                    minion.currentAction = "rangedAttack";
+                    minion.locationData.target = minion.enemiesInRangedRange[0];
+                    // generate damage
+                    minion.locationData.target.stats.health -=
+                        Math.floor((Math.random() * minion.stats.attack) / 2) **
+                        2;
+                    await minion.target.save();
+                    console.log(
+                        `Minion ${minionId} attacked ${minion.enemiesInRangedRange[0]._id}`
+                    );
+                    minion.taskQueue.push({
+                        task: "attack",
+                        taskData: {
+                            target: minion.enemiesInRangedRange[0]._id,
+                        },
+                        eta:
+                            Date.now() +
+                            Math.min(
+                                50000 / minion.stats.rangedAttackSpeed,
+                                minion.stats.rangedAttackCooldown
+                            ),
+                    });
+                } else {
+                    // move to target
+                    // change mode to pursue
+                    minion.currentAction = "pursue";
+                    minion.locationData.target = minion.enemiesInVision[0];
+                    minion = generatePathingMovementTasks(
+                        minion,
+                        minion.enemiesInVision[0]
+                    );
+                }
+            } else {
+                // If no enemies in vision and no tasks in queue, generate a new move task to a random neighboring location
+                if (minion.taskQueue.length == 0) {
+                    const randomNeighbor = getRandomGridPoint(
+                        minion.locationData.position.coordinates,
+                        3
+                    );
+                    minion = generatePathingMovementTasks(
+                        minion,
+                        randomNeighbor
+                    );
+                }
+            }
+        } else if (task.task === "pursue") {
+            minion.locationData.target = task.taskData.target;
+            minion = generatePathingMovementTasks(minion, task.taskData.target);
+        } else if (task.task === "attack") {
+            minion.locationData.target = task.taskData.target;
+            minion = generateAttackTasks(minion, task.taskData.target);
         } else {
             minion.taskQueue = minion.taskQueue.filter(
                 (t) => t.task !== "move"
@@ -131,7 +291,7 @@ function updateTaskQueue(minion) {
     }
 
     return minion;
-}
+};
 
 const clearTaskQueue = expressAsyncHandler(async (req, res) => {
     const { minionId } = req.body;
@@ -157,31 +317,17 @@ const clearTaskQueue = expressAsyncHandler(async (req, res) => {
     });
 });
 
-const moveMinion = expressAsyncHandler(async (req, res) => {
-    const { minionId, coords, appendQueue } = req.body;
-    if (!minionId || !coords) {
-        res.status(400).json({
-            status: "error",
-            message: "Please provide all required fields",
-        });
-        throw new Error("Please provide all required fields");
-    }
-
-    let minion = await fetchMinion(minionId);
-    if (!minion) {
-        res.status(404).json({
-            status: "fail",
-            message: "Minion not found",
-        });
-        throw new Error("Minion not found");
-    } else {
-        console.log(
-            `Received request to move minion ${minionId} from `,
-            minion.locationData.position.coordinates,
-            ` to `,
-            coords
-        );
-    }
+const generatePathingMovementTasks = (
+    minion,
+    movementTarget,
+    appendQueue = false
+) => {
+    const coords =
+        movementTarget.type == "Point"
+            ? movementTarget.coordinates
+            : movementTarget.type == "Minion"
+            ? movementTarget.locationData.position.coordinates
+            : null;
 
     const currentCoords = minion.locationData.position.coordinates;
 
@@ -257,8 +403,7 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
                         coords
                     );
                     let eta = Date.now();
-                    let from = truePath[0];
-                    let to = truePath[1];
+
                     if (!appendQueue) {
                         minion.taskQueue = minion.taskQueue.filter((task) => {
                             return task.task !== "move";
@@ -267,6 +412,7 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
                         //     `Canceled movement tasks, ${minion.taskQueue.length} tasks remaining`
                         // );
                     }
+                    let from = truePath.shift();
                     truePath.forEach((node) => {
                         eta += Math.floor(50000 / minion.stats.speed);
                         minion.taskQueue.push({
@@ -292,20 +438,55 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
                         Math.PI;
                     // Save the minion
                     // console.log(`added ${truePath.length} tasks to queue`);
-                    minion.save();
-                    res.status(200).json({
-                        status: "success",
-                        data: {
-                            minion,
-                        },
-                    });
+                    return minion;
                 }
             }
         );
-        easystar.calculate();
+        return easystar.calculate();
     } catch (err) {
         console.log(err);
+        return minion;
     }
+};
+
+const moveMinion = expressAsyncHandler(async (req, res) => {
+    const { minionId, coords, appendQueue, target } = req.body;
+    if (!minionId || (!coords && !target)) {
+        res.status(400).json({
+            status: "error",
+            message: "Please provide all required fields",
+        });
+        throw new Error("Please provide all required fields");
+    }
+
+    let minion = await fetchMinion(minionId);
+    if (!minion) {
+        res.status(404).json({
+            status: "fail",
+            message: "Minion not found",
+        });
+        throw new Error("Minion not found");
+    } else {
+        const position = coords
+            ? { type: "Point", coordinates: coords }
+            : target.type == "Minion"
+            ? target.locationData.position
+            : null;
+        console.log(
+            `Received request to move minion ${minionId} from `,
+            minion.locationData.position.coordinates,
+            ` to `,
+            position
+        );
+    }
+    minion = generatePathingMovementTasks(minion, position);
+    minion.save();
+    return res.status(200).json({
+        status: "success",
+        data: {
+            minion,
+        },
+    });
 });
 
 module.exports = {
