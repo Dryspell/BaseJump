@@ -6,6 +6,8 @@ const {
     generatePathingMovementTasks,
     getRandomArbitrary,
     getRandomGridPoint,
+    engageTargetsInVision,
+    regenerateVision,
 } = require("../controllers/minionBehaviour");
 
 const fetchMinions = expressAsyncHandler(async (req, res) => {
@@ -16,26 +18,90 @@ const fetchMinions = expressAsyncHandler(async (req, res) => {
             message: "No minions found",
         });
     }
+    console.log(
+        `\n /////////////////////////////////////////////////////// \n`
+    );
     console.log(`Fetching minion ${req.params.minionId}`);
 
     let minion = await fetchMinion(req.params.minionId);
 
     if (minion) {
-        await minion.save();
+        minion = await minion.save();
         res.status(200).json({
             status: "success",
             data: minion,
         });
     }
+    console.log(
+        `\n /////////////////////////////////////////////////////// \n`
+    );
+});
+
+const fetchAllMinions = expressAsyncHandler(async (req, res) => {
+    console.log(
+        `\n /////////////////////////////////////////////////////// \n`
+    );
+    let { coords, x, y } = req.body;
+    if (x && y) {
+        coords = { x: x, y: y };
+    }
+    console.log(`Fetching all minions`, coords ? `at ${coords}` : "");
+
+    const IS_ADMIN = req.user.isAdmin || true;
+    if (!IS_ADMIN) {
+        console.log(
+            `${req.user.email} is not an admin, cannot access all minions resouce`
+        );
+        res.status(403).json({
+            status: "fail",
+            message: "You are not authorized to view this page",
+        });
+    }
+
+    const minions = await Minion.find(
+        coords
+            ? {
+                  "locationData.position.coordinates": {
+                      $in: [coords],
+                  },
+              }
+            : {}
+    ).exec();
+    console.log(minions.length);
+    if (minions) {
+        res.status(200).json({
+            status: "success",
+            data: minions,
+        });
+    }
+    console.log(
+        `\n /////////////////////////////////////////////////////// \n`
+    );
 });
 
 const fetchMinion = async (minionId) => {
     const minion = await Minion.findById(minionId);
-    console.log(`Fetched minion ${minionId}`);
-    if (minion) {
-        return updateTaskQueue(minion);
+    const taskCount = minion.taskQueue.length;
+    console.log(
+        `Found minion ${minion._id} from DB, located at`,
+        minion.locationData.position.coordinates,
+        `with ${taskCount} tasks`
+    );
+    let updatedMinion = await regenerateVision(minion);
+    try {
+        updatedMinion.enemiesInVision.forEach(async (enemy) => {
+            updateTaskQueue(enemy);
+        });
+    } catch (e) {
+        console.log(e);
     }
-    return null;
+    updatedMinion = await updateTaskQueue(minion);
+    console.log(
+        `Fetched minion has been updated with ${
+            updatedMinion.taskQueue.length - taskCount
+        } new tasks, queue length: ${updatedMinion.taskQueue.length}`
+    );
+    return updatedMinion;
 };
 
 const spawnMinion = expressAsyncHandler(async (req, res) => {
@@ -166,6 +232,7 @@ const moveMinion = expressAsyncHandler(async (req, res) => {
 
 module.exports = {
     fetchMinions,
+    fetchAllMinions,
     spawnMinion,
     moveMinion,
     clearTaskQueue,
