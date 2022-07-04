@@ -100,10 +100,13 @@ const attackTarget = async (minion, attackType, task = null) => {
 
     try {
         const enemy = minion.locationData.target;
-        const res = await Minion.replaceOne({ _id: enemy._id }, enemy);
-        // console.log(
-        //     `Updated enemy minion: ${enemy._id}, ${res.nModified} document saved to DB`
-        // );
+        const res = await Minion.updateOne(
+            { _id: enemy._id },
+            { "stats.health": enemy.stats.health }
+        );
+        console.log(
+            `Updated enemy minion: ${enemy._id}, ${res.nModified} document saved to DB`
+        );
     } catch (err) {
         console.log(err);
     }
@@ -260,7 +263,15 @@ const regenerateVision = async (minion) => {
         console.log(err);
         throw err;
     }
-
+    Minion.updateOne(
+        { _id: minion._id },
+        {
+            enemiesInVision: minion.enemiesInVision,
+            enemiesInMeleeRange: minion.enemiesInMeleeRange,
+            enemiesInRangedRange: minion.enemiesInRangedRange,
+            "locationData.tilesInVision": minion.locationData.tilesInVision,
+        }
+    ).exec();
     return minion;
 };
 
@@ -268,126 +279,136 @@ const engageTargetsInVision = async (minion, task = null) => {
     // console.log(`Minion ${minion._id} is checking for targets in vision`);
     minion = await regenerateVision(minion);
 
-    if (task?.task) {
-        if (
-            task.task === "meleeAttack" &&
-            minion.enemiesInMeleeRange.length > 0 &&
-            minion.enemiesInMeleeRange
-                .map((enemy) => enemy._id)
-                .includes(task.taskData.target._id)
-        ) {
-            console.log(
-                `${task.taskData.target.type} ${task.taskData.target._id} is still in melee range`
-            );
-            console.log(
-                `Minion ${minion._id} is proceeding to ${task.task} an enemy ${
-                    task.taskData.target.name
-                } in range at distance ${distance2(
-                    task.taskData.target.locationData.position.coordinates,
-                    minion.locationData.position.coordinates
-                )}`
-            );
-            minion = await attackTarget(minion, "melee", task);
-        } else if (
-            task.task === "rangedAttack" ||
-            (task.task === "meleeAttack" &&
-                minion.enemiesInRangedRange.length > 0 &&
-                minion.enemiesInRangedRange
+    try {
+        if (task?.task) {
+            if (
+                task.task === "meleeAttack" &&
+                minion.enemiesInMeleeRange.length > 0 &&
+                minion.enemiesInMeleeRange
                     .map((enemy) => enemy._id)
-                    .includes(task.taskData.target._id))
-        ) {
-            if (task.task === "meleeAttack") {
+                    .includes(task.taskData.target._id)
+            ) {
                 console.log(
-                    `${task.taskData.target.type} ${task.taskData.target._id} is out of melee range, switching to ranged attack`
+                    `${task.taskData.target.type} ${task.taskData.target._id} is still in melee range`
                 );
-                task.task = "rangedAttack";
+                console.log(
+                    `Minion ${minion._id} is proceeding to ${
+                        task.task
+                    } an enemy ${
+                        task.taskData.target.name
+                    } in range at distance ${distance2(
+                        task.taskData.target.locationData.position.coordinates,
+                        minion.locationData.position.coordinates
+                    )}`
+                );
+                minion = await attackTarget(minion, "melee", task);
+            } else if (
+                task.task === "rangedAttack" ||
+                (task.task === "meleeAttack" &&
+                    minion.enemiesInRangedRange.length > 0 &&
+                    minion.enemiesInRangedRange
+                        .map((enemy) => enemy._id)
+                        .includes(task.taskData.target._id))
+            ) {
+                if (task.task === "meleeAttack") {
+                    console.log(
+                        `${task.taskData.target.type} ${task.taskData.target._id} is out of melee range, switching to ranged attack`
+                    );
+                    task.task = "rangedAttack";
+                }
+
+                console.log(
+                    `Minion ${minion._id} is proceeding to ${
+                        task.task
+                    } an enemy ${
+                        task.taskData.target.name
+                    } in range at distance ${distance2(
+                        task.taskData.target.locationData.position.coordinates,
+                        minion.locationData.position.coordinates
+                    )}`
+                );
+                minion = await attackTarget(minion, "ranged", task);
             }
-
-            console.log(
-                `Minion ${minion._id} is proceeding to ${task.task} an enemy ${
-                    task.taskData.target.name
-                } in range at distance ${distance2(
-                    task.taskData.target.locationData.position.coordinates,
-                    minion.locationData.position.coordinates
-                )}`
-            );
-            minion = await attackTarget(minion, "ranged", task);
-        } else if (
-            task.task === "patrol" &&
-            minion.enemiesInVision.length === 0
-        ) {
-            // If no enemies in vision and no tasks in queue, generate a new move task to a random neighboring location
-            console.log(
-                `Minion ${minion._id} has no enemies in vision, patrolling randomly`
-            );
-            const randomNeighbor = getRandomGridPoint(
-                minion.locationData.position.coordinates,
-                3
-            );
-            minion = await generatePathingMovementTasks(minion, randomNeighbor);
         }
+    } catch (err) {
+        console.log(err);
+        throw err;
     }
 
-    if (minion.enemiesInMeleeRange.length > 0) {
-        if (
-            minion.locationData.target._id === minion.enemiesInMeleeRange[0]._id
-        ) {
+    try {
+        if (minion.enemiesInMeleeRange.length > 0) {
+            if (
+                minion.locationData.target?._id ===
+                minion.enemiesInMeleeRange[0]._id
+            ) {
+                console.log(
+                    `Minion ${minion._id} is maintaining target ${minion.locationData.target.name}`
+                );
+            } else {
+                console.log(
+                    `Minion ${minion._id} has changed target from ${minion.locationData.target?.name} to ${minion.enemiesInMeleeRange[0].name}`,
+                    minion.locationData.target?.name,
+                    minion.enemiesInMeleeRange[0].name
+                );
+                console.log(
+                    `Minion ${minion._id} has changed targets to ${minion.enemiesInMeleeRange[0].name}`
+                );
+                minion.locationData.target = minion.enemiesInMeleeRange[0];
+            }
+            minion = await attackTarget(minion, "melee");
+        } else if (minion.enemiesInRangedRange.length > 0) {
+            if (
+                String(minion.locationData.target?._id) ==
+                String(minion.enemiesInRangedRange[0]._id)
+            ) {
+                console.log(
+                    `Minion ${minion._id} is already attacking ${minion.locationData.target?._id}`
+                );
+            } else {
+                console.log(
+                    `Minion ${minion._id} has changed targets from ${minion.locationData.target.name} to ${minion.enemiesInRangedRange[0].name}, and is attacking`
+                );
+                minion.locationData.target = minion.enemiesInRangedRange[0];
+            }
+            minion = await attackTarget(minion, "ranged");
+        } else if (minion.enemiesInVision.length > 0) {
+            minion.currentAction = "pursue";
+            minion.locationData.sameTarget =
+                minion.locationData.target === minion.enemiesInVision[0]
+                    ? true
+                    : false;
+            minion.locationData.target = minion.enemiesInVision[0];
             console.log(
-                `Minion ${minion._id} is maintaining target ${minion.locationData.target.name}`
+                `Minion ${minion._id} is doing "${
+                    minion.currentAction
+                }" towards ${
+                    minion.locationData.sameTarget ? "same" : ""
+                } target: ${minion.locationData.target.type} ${
+                    minion.locationData.target._id
+                } located at`,
+                minion.locationData.target.locationData.position.coordinates
             );
-        } else {
-            console.log(
-                minion.locationData.target.name,
-                minion.enemiesInMeleeRange[0].name
-            );
-            console.log(
-                `Minion ${minion._id} has changed targets to ${minion.enemiesInMeleeRange[0].name}`
-            );
-            minion.locationData.target = minion.enemiesInMeleeRange[0];
+            !minion.locationData.sameTarget
+                ? (minion = await generatePathingMovementTasks(
+                      minion,
+                      minion.enemiesInVision[0]
+                  ))
+                : null;
         }
-        minion = await attackTarget(minion, "melee");
-    } else if (minion.enemiesInRangedRange.length > 0) {
-        if (
-            String(minion.locationData.target._id) ==
-            String(minion.enemiesInRangedRange[0]._id)
-        ) {
-            console.log(
-                `Minion ${minion._id} is already attacking ${minion.locationData.target.name}`
-            );
-        } else {
-            console.log(
-                `Minion ${minion._id} has changed targets to ${minion.enemiesInRangedRange[0].name}, and is attacking`
-            );
-            minion.locationData.target = minion.enemiesInRangedRange[0];
-        }
-        minion = await attackTarget(minion, "ranged");
-    } else if (minion.enemiesInVision.length > 0) {
-        minion.currentAction = "pursue";
-        minion.locationData.sameTarget =
-            minion.locationData.target === minion.enemiesInVision[0]
-                ? true
-                : false;
-        minion.locationData.target = minion.enemiesInVision[0];
-        console.log(
-            `Minion ${minion._id} is doing "${minion.currentAction}" towards ${
-                minion.locationData.sameTarget ? "same" : ""
-            } target: ${minion.locationData.target.type} ${
-                minion.locationData.target._id
-            } located at`,
-            minion.locationData.target.locationData.position.coordinates
-        );
-        !minion.locationData.sameTarget
-            ? (minion = await generatePathingMovementTasks(
-                  minion,
-                  minion.enemiesInVision[0]
-              ))
-            : null;
+    } catch (err) {
+        console.log(err);
+        throw err;
     }
+
     return minion;
 };
 
 const evaluateTask = async (minion, task) => {
     try {
+        minion.taskQueue =
+            minion.taskQueue[0] == task
+                ? minion.taskQueue.slice(1)
+                : minion.taskQueue;
         if (task.taskData?.hasOwnProperty("to")) {
             if (
                 task.taskData.to == minion.locationData.position.coordinates ||
@@ -426,6 +447,19 @@ const evaluateTask = async (minion, task) => {
         ) {
             minion.taskQueue = [];
             minion = await engageTargetsInVision(minion, task);
+        } else if (
+            task.task === "patrol" &&
+            minion.enemiesInVision.length === 0
+        ) {
+            // If no enemies in vision and no tasks in queue, generate a new move task to a random neighboring location
+            console.log(
+                `Minion ${minion._id} has no enemies in vision, patrolling randomly`
+            );
+            const randomNeighbor = getRandomGridPoint(
+                minion.locationData.position.coordinates,
+                3
+            );
+            minion = await generatePathingMovementTasks(minion, randomNeighbor);
         } else {
             if (minion.taskQueue.length > 0) {
                 ["patrol", "pursue", "attack", "move"].includes(task.type)
@@ -433,10 +467,6 @@ const evaluateTask = async (minion, task) => {
                     : console.log("Unknown next task");
             }
         }
-
-        ["patrol"].includes(minion.currentAction)
-            ? (minion = await engageTargetsInVision(minion, task))
-            : null;
 
         console.log(
             `Minion ${minion._id} finished task ${task.task}${
@@ -450,12 +480,47 @@ const evaluateTask = async (minion, task) => {
         console.log(e);
         throw e;
     }
+    try {
+        const res = await Minion.updateOne(
+            { _id: minion._id },
+            {
+                locationData: minion.locationData,
+                taskHistory: minion.taskHistory,
+                taskQueue: minion.taskQueue,
+            }
+        );
+        console.log(
+            `Minion ${minion._id} updated, ${res.nModified} document saved to DB`
+        );
+    } catch (e) {
+        console.log(e);
+        throw e;
+    }
 
-    const res = await Minion.replaceOne({ _id: minion._id }, minion);
-    // console.log(
-    //     `Minion ${minion._id} updated, ${res.nModified} document saved to DB`
-    // );
     return minion;
+};
+
+const batchUpdateTaskQueue = async (minions) => {
+    try {
+        let taskless = minions.filter((minion) => {
+            return minion.taskQueue.length === 0;
+        });
+        taskless = taskless.map(async (minion) => {
+            return await generateTaskForTaskless(minion);
+        });
+        minions = minions
+            .filter((minion) => {
+                return minion.taskQueue.length > 0;
+            })
+            .map(async (minion) => {
+                task = minion.taskQueue.shift();
+                return await evaluateTask(minion, task);
+            });
+    } catch (e) {
+        console.log(e);
+        throw e;
+    }
+    return minions;
 };
 
 const updateTaskQueue = async (minion) => {
@@ -481,15 +546,7 @@ const updateTaskQueue = async (minion) => {
         taskCount === minion.taskQueue.length ? taskCount++ : null;
     }
 
-    if (minion.taskQueue.length == 0) {
-        console.log(
-            minion.taskQueue.length == 0
-                ? "No tasks in queue"
-                : "Tasks in queue"
-        );
-        minion.currentAction = minion.atRestAction;
-        minion = await evaluateTask(minion, { task: minion.currentAction });
-    }
+    minion = await generateTaskForTaskless(minion);
 
     return minion;
 };
@@ -621,7 +678,9 @@ const generatePathingMovementTasks = (
                         : minion.taskHistory
                         ? minion.taskHistory.sort((a, b) => b.eta - a.eta)[0]
                         : null;
-                    const eta = lastTask?.eta || Date.now();
+                    const eta =
+                        lastTask?.eta ||
+                        Date.now() + 50000 / minion.stats.speed;
                     minion.taskQueue.push({
                         eta: eta,
                         task: "move",
@@ -666,4 +725,18 @@ module.exports = {
     generatePathingMovementTasks,
     engageTargetsInVision,
     regenerateVision,
+    batchUpdateTaskQueue,
 };
+
+async function generateTaskForTaskless(minion) {
+    if (minion.taskQueue.length == 0) {
+        console.log(
+            minion.taskQueue.length == 0
+                ? "No tasks in queue"
+                : "Tasks in queue"
+        );
+        minion.currentAction = minion.atRestAction;
+        minion = await evaluateTask(minion, { task: minion.currentAction });
+    }
+    return minion;
+}

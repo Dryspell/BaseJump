@@ -8,6 +8,7 @@ const {
     getRandomGridPoint,
     engageTargetsInVision,
     regenerateVision,
+    batchUpdateTaskQueue,
 } = require("../controllers/minionBehaviour");
 
 const fetchMinions = expressAsyncHandler(async (req, res) => {
@@ -26,7 +27,6 @@ const fetchMinions = expressAsyncHandler(async (req, res) => {
     let minion = await fetchMinion(req.params.minionId);
 
     if (minion) {
-        minion = await minion.save();
         res.status(200).json({
             status: "success",
             data: minion,
@@ -87,21 +87,39 @@ const fetchMinion = async (minionId) => {
         minion.locationData.position.coordinates,
         `with ${taskCount} tasks`
     );
-    let updatedMinion = await regenerateVision(minion);
     try {
-        updatedMinion.enemiesInVision.forEach(async (enemy) => {
-            updateTaskQueue(enemy);
+        let minionsToUpdate = await Minion.find({
+            _id: { $ne: minion._id },
+            $or: [
+                { "taskQueue.0.eta": { $lte: Date.now() } },
+                { "taskQueue.0.eta": { $exists: false } },
+            ],
+        }).exec();
+        console.log(
+            `\n Found ${minionsToUpdate.length} other minions to update`
+        );
+        minionsToUpdate = minionsToUpdate.map(async (minion) => {
+            return await updateTaskQueue(minion);
         });
-    } catch (e) {
-        console.log(e);
+        // minionsToUpdate = await batchUpdateTaskQueue(minionsToUpdate);
+        minionsToUpdate = await Promise.all(minionsToUpdate);
+        console.log(
+            `Updated ${minionsToUpdate.length} minions:`,
+            minionsToUpdate.map((minion) => minion._id)
+        );
+
+        let updatedMinion = await updateTaskQueue(minion);
+        console.log(
+            `Fetched minion has been updated with ${
+                updatedMinion.taskQueue.length - taskCount
+            } new tasks, queue length: ${updatedMinion.taskQueue.length}`
+        );
+
+        return updatedMinion;
+    } catch (err) {
+        console.log(err);
+        throw err;
     }
-    updatedMinion = await updateTaskQueue(minion);
-    console.log(
-        `Fetched minion has been updated with ${
-            updatedMinion.taskQueue.length - taskCount
-        } new tasks, queue length: ${updatedMinion.taskQueue.length}`
-    );
-    return updatedMinion;
 };
 
 const spawnMinion = expressAsyncHandler(async (req, res) => {
