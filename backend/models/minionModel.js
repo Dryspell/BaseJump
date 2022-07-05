@@ -15,6 +15,11 @@ const minionSchema = mongoose.Schema(
             ref: "User",
             required: true,
         },
+        world: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "World",
+            required: true,
+        },
         isAlive: { type: Boolean, default: true },
         type: { type: String, default: "Minion" },
         stats: {
